@@ -19,9 +19,9 @@ A delta-neutral portfolio maintains zero first-order sensitivity to price moveme
 3. **Liquidity & Margin Risk**: Execution costs and margin breaches dominate in stress
 4. **Non-linear Losses**: Liquidation mechanics introduce convexity near thresholds
 
-### Risk Factor Sensitivities
+### Risk Factor Sensitivities (Greeks for Delta-Neutral Strategies)
 
-#### Delta (Δ)
+#### Delta (Δ) - Price Sensitivity
 First derivative of portfolio value with respect to underlying price (directional exposure).
 
 ```
@@ -30,29 +30,140 @@ First derivative of portfolio value with respect to underlying price (directiona
 
 - **Spot Asset**: Δ = +1 per unit
 - **Perpetual Swap**: Δ ≈ +1 per contract (long), -1 (short)
+- **Target**: Δ_portfolio ≈ 0 for delta neutrality
 
-**Delta Hedging**: Rebalance positions to maintain Δ_portfolio ≈ 0.
+**Delta Hedging**: Continuously rebalance positions to maintain Δ_portfolio ≈ 0.
+
+**Delta-Neutral Portfolio Example:**
+```
+Long 10 ETH Spot:     Δ = +10.0
+Short 10 ETH Perp:    Δ = -10.0
+Net Portfolio Delta:  Δ = 0.0
+```
+
+#### Gamma (Γ) - Convexity Risk
+Second derivative of portfolio value with respect to underlying price (delta sensitivity).
+
+```
+Γ = ∂²V/∂S² = ∂Δ/∂S
+```
+
+- **Linear Instruments**: Spot and perpetual swaps have Γ ≈ 0
+- **Liquidation Gamma**: Non-linear losses near margin thresholds create effective gamma
+- **Portfolio Impact**: Delta-neutral portfolios typically have low gamma, but liquidation mechanics introduce convexity
+
+**Liquidation Convexity:**
+```
+Effective_Γ = Risk_of_Forced_Unwind_at_Loss_Prices
+```
+
+This "gamma" comes from margin calls and liquidations rather than instrument characteristics.
+
+#### Vega (ν) - Volatility Sensitivity
+Sensitivity to changes in implied volatility.
+
+```
+ν = ∂V/∂σ
+```
+
+- **Spot/Perp Portfolios**: Direct vega ≈ 0 (no options)
+- **Indirect Vega**: Volatility affects funding rates, basis, and liquidity
+- **Realized Vol Impact**: Higher volatility increases rebalancing costs and slippage
+
+**For Delta-Neutral Strategies:**
+```
+Indirect_Vega_Sources:
+- Funding rate volatility correlation
+- Basis volatility (spot-perp divergence)  
+- Liquidity impact (wider spreads in volatile markets)
+```
+
+#### Theta (Θ) - Time Decay
+Sensitivity to passage of time.
+
+```
+Θ = ∂V/∂t
+```
+
+- **Perpetual Contracts**: No expiration, so direct theta ≈ 0
+- **Funding Theta**: Time decay from funding payments
+- **Carry Theta**: P&L from holding positions over time
+
+**Delta-Neutral Time Decay Sources:**
+```
+Total_Θ = Funding_Θ + Basis_Θ + Transaction_Cost_Θ
+
+Where:
+Funding_Θ = Position_Notional × Funding_Rate × dt
+Basis_Θ = Basis_Mean_Reversion_PnL
+Transaction_Cost_Θ = -Rehedging_Costs
+```
+
+#### Rho (ρ) - Rate Sensitivity
+Sensitivity to interest rate or funding rate changes.
+
+```
+ρ = ∂V/∂r
+```
+
+**For perpetual swaps, this becomes funding rate sensitivity:**
+
+```
+Funding_ρ = ∂V/∂(Funding_Rate)
+         = Position_Size × Mark_Price × Time_to_Next_Funding
+```
+
+- **Long Perp**: Negative rho (pays when funding increases)
+- **Short Perp**: Positive rho (receives when funding increases)  
+- **Delta-Neutral Impact**: Net funding exposure depends on hedge ratio precision
 
 #### Basis Delta
-Sensitivity of equity to the perp-spot (or LST-spot) basis.
+Sensitivity to the perp-spot (or derivative-underlying) basis.
 
 ```
-Basis = Perpetual_Price - Spot_Price
+Basis_Δ = ∂V/∂(Perp_Price - Spot_Price)
 ```
 
-Basis exposure drives P&L even when delta is neutral.
+**Critical for Delta-Neutral Strategies:**
+- Even with perfect delta hedge, basis changes create P&L
+- Basis risk cannot be hedged away without perfect correlation
+- Primary risk factor when price delta is neutralized
 
-#### Funding Sensitivity (Rho-like)
-Sensitivity to funding rate changes (annualized).
+#### Lambda (Liquidity Sensitivity)
+Sensitivity to market liquidity and bid-ask spreads.
 
 ```
-Funding_PnL ≈ Notional × Funding_Rate × Time_Fraction
+λ = ∂V/∂(Spread)
 ```
 
-Funding is a primary carry driver and a key source of drawdowns when regimes flip.
+**Delta-Neutral Liquidity Risk:**
+- Rebalancing frequency creates transaction cost drag
+- Stressed markets widen spreads precisely when rehedging needed
+- Asymmetric: easier to get long than short in crashes
 
-#### Effective Gamma (Liquidation Convexity)
-Non-linear losses near margin thresholds from liquidation mechanics and forced unwinds.
+**Liquidity-Adjusted Greeks:**
+```
+Effective_Δ = Theoretical_Δ ± Spread_Impact
+Effective_Γ = Theoretical_Γ + Liquidity_Convexity
+```
+
+### Greek Interaction Matrix for Delta-Neutral Portfolios
+
+| Greek | Direct Impact | Indirect Impact | Hedging Strategy |
+|-------|---------------|-----------------|------------------|
+| **Delta** | Target = 0 | Basis drift | Continuous rebalancing |
+| **Gamma** | ~0 (linear instruments) | Liquidation risk | Margin management |
+| **Vega** | ~0 (no options) | Funding volatility | Volatility regime awareness |
+| **Theta** | Funding carry | Transaction costs | Optimize rebalance frequency |
+| **Rho** | Funding sensitivity | Rate cycle impact | Funding rate hedging |
+
+### Key Insights for Delta-Neutral Risk Management
+
+1. **Primary Risk Shifts**: From directional (delta) to basis, funding, and liquidity risks
+2. **Hidden Gamma**: Liquidation mechanics create convexity even with linear instruments  
+3. **Funding Dominance**: Rho (funding sensitivity) often dominates P&L in delta-neutral strategies
+4. **Correlation Breakdown**: When spot-perp correlation fails, "delta neutral" becomes directional
+5. **Regime Sensitivity**: Greeks change dramatically across market regimes (calm vs. stressed)
 
 ### Perpetual Swap Mechanics
 
