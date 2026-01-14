@@ -107,50 +107,50 @@ class PathGenerator:
         """
         paths = {}
 
+        if (
+            JIT_AVAILABLE
+            and calculate_gbm_paths is not None
+            and jump_intensity == 0
+            and self.n_assets == 1
+        ):
+            symbol = self.symbols[0]
+            S0 = initial_prices[symbol]
+            vol = volatilities[symbol]
+            mu = drift[symbol]
+
+            random_normals = self.rng.standard_normal(n_steps)
+            path = calculate_gbm_paths(
+                n_paths=1,
+                n_steps=n_steps,
+                S0=S0,
+                mu=mu,
+                sigma=vol,
+                dt=dt,
+                random_normals=random_normals.reshape(1, -1)
+            )[0]
+            return {symbol: path}
+
+        Z = self.rng.standard_normal((n_steps, self.n_assets))
+        correlated_Z = Z @ self.cholesky.T
+
         for i, symbol in enumerate(self.symbols):
             S0 = initial_prices[symbol]
             vol = volatilities[symbol]
             mu = drift[symbol]
 
-            if JIT_AVAILABLE and calculate_gbm_paths is not None and jump_intensity == 0:
-                # Use JIT-compiled GBM for maximum speed (no jumps)
-                random_normals = self.rng.standard_normal(n_steps)
-                path = calculate_gbm_paths(
-                    n_paths=1,
-                    n_steps=n_steps,
-                    S0=S0,
-                    mu=mu,
-                    sigma=vol,
-                    dt=dt,
-                    random_normals=random_normals.reshape(1, -1)
-                )[0]  # Extract single path
-                paths[symbol] = path
-            else:
-                # Fallback to Python implementation or when jumps are needed
-                # Generate correlated normal shocks
-                Z = self.rng.standard_normal((n_steps, self.n_assets))
-                correlated_Z = Z @ self.cholesky.T
+            returns = (mu - 0.5 * vol**2) * dt + vol * np.sqrt(dt) * correlated_Z[:, i]
 
-                # GBM component
-                returns = (mu - 0.5 * vol**2) * dt + vol * \
-                    np.sqrt(dt) * correlated_Z[:, i]
+            if jump_intensity > 0:
+                n_jumps = self.rng.poisson(jump_intensity * dt * n_steps)
+                if n_jumps > 0:
+                    jump_times = self.rng.choice(n_steps, size=n_jumps, replace=False)
+                    jump_sizes = self.rng.normal(jump_mean, jump_std, size=n_jumps)
+                    returns[jump_times] += jump_sizes
 
-                # Add jumps (Merton jump diffusion)
-                if jump_intensity > 0:
-                    n_jumps = self.rng.poisson(jump_intensity * dt * n_steps)
-                    if n_jumps > 0:
-                        jump_times = self.rng.choice(
-                            n_steps, size=n_jumps, replace=False)
-                        jump_sizes = self.rng.normal(
-                            jump_mean, jump_std, size=n_jumps)
-                        returns[jump_times] += jump_sizes
+            price_path = S0 * np.exp(np.cumsum(returns))
+            price_path = np.concatenate([[S0], price_path])
 
-                # Cumulative returns to prices
-                price_path = S0 * np.exp(np.cumsum(returns))
-                price_path = np.concatenate(
-                    [[S0], price_path])  # Include initial price
-
-                paths[symbol] = price_path
+            paths[symbol] = price_path
 
         return paths
 
